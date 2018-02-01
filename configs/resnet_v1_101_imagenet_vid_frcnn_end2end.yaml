@@ -3,7 +3,7 @@ MXNET_VERSION: "mxnet"
 output_path: "./output/frcnn/imagenet_vid"
 symbol: resnet_v1_101_frcnn
 gpus: '0,1'
-CLASS_AGNOSTIC: true
+CLASS_AGNOSTIC: false
 SCALES:
 - - 600
   - 1000
@@ -11,7 +11,7 @@ default:
   frequent: 100
   kvstore: device
 pretrained_model:
-  path: "/slwork/HAMMERMASH/Detections/models/pretrained_model/resnet_v1_101-0000.params" 
+  path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/models/pretrained_model/resnet_v1_101-0000.params" 
   pretrained_epoch: 0
 network:
   PIXEL_MEANS:
@@ -51,9 +51,9 @@ network:
 dataset:
   NUM_CLASSES: 31
   dataset: ImageNetVID
-  dataset_path: "/slwork/HAMMERMASH/Detections/data/ILSVRC2015"
+  dataset_path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/data/ILSVRC2015"
   image_set: DET_train_30classes+VID_train_15frames
-  root_path: "/slwork/HAMMERMASH/Detections/data/"
+  root_path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/data/"
   test_image_set: VID_val_frames
   proposal: rpn
 TRAIN:
@@ -75,7 +75,7 @@ TRAIN:
   # whether shuffle image
   SHUFFLE: true
   # whether use OHEM
-  ENABLE_OHEM: true
+  ENABLE_OHEM: false
   # size of images for each device, 1 for e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric

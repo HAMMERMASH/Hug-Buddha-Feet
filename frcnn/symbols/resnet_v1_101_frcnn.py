@@ -4,7 +4,7 @@
 # Licensed under The Apache-2.0 License [see LICENSE for details]
 # Written by Yuwen Xiong, Xizhou Zhu
 # --------------------------------------------------------
-
+import sys
 import cPickle
 import mxnet as mx
 from utils.symbol import Symbol
@@ -12,7 +12,8 @@ from operator_py.proposal import *
 from operator_py.proposal_target import *
 from operator_py.box_annotator_ohem import *
 from operator_py.rpn_inv_normalize import *
-from backbones.symbols.resnet_v1 import residual_layer
+sys.path.insert(0, '../../')
+from backbones.resnet_v1 import residual_layer
 
 class resnet_v1_101_frcnn(Symbol):
     
@@ -30,18 +31,18 @@ class resnet_v1_101_frcnn(Symbol):
         
         rpn_feat = residual_layer(data, self.units[:3], self.filter_list[:3], ['2','3','4'])
 
-        return rpn_feat, rcnn_feat
+        return rpn_feat
     
     def get_rcnn_feat(self, data):
          
-        rcnn_feat = residual_layer(data, self.units[-1], self.filter_list[-1], ['5'], conv1=False, last_stride=True) 
+        rcnn_feat = residual_layer(data, [self.units[-1]], [self.filter_list[-1]], ['5'], conv1=False) 
 
         return rcnn_feat
 
     def region_classification(self, data, num_classes, num_reg_classes):
         
         cls_score = mx.sym.FullyConnected(data=data, num_hidden=num_classes, name='rcnn_cls_score')
-        bbox_pred = mx.sym.FullyConnected(data=data, num_hidden=num_reg_classes, name='rcnn_bbox_pred')
+        bbox_pred = mx.sym.FullyConnected(data=data, num_hidden=4*num_reg_classes, name='rcnn_bbox_pred')
 
         return cls_score, bbox_pred
 
@@ -64,12 +65,13 @@ class resnet_v1_101_frcnn(Symbol):
         rpn_feat = self.get_rpn_feat(data)
     
         # RPN layers
-        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernal=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
+        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernel=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
+        rpn_conv_relu = mx.sym.Activation(data=rpn_conv, act_type='relu', name='rpn_feat_conv_relu') 
         rpn_cls_score = mx.sym.Convolution(
-            data=rpn_conv, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
+            data=rpn_conv_relu, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
         rpn_bbox_pred = mx.sym.Convolution(
-            data=rpn_conv, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
-    
+            data=rpn_conv_relu, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
+        
         # prepare rpn data
         rpn_cls_score_reshape = mx.sym.Reshape(
             data=rpn_cls_score, shape=(0, 2, -1, 0), name="rpn_cls_score_reshape")
@@ -164,7 +166,7 @@ class resnet_v1_101_frcnn(Symbol):
 
         # RPN
         rpn_feat = self.get_rpn_feat(data)
-        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernal=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
+        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernel=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
         rpn_cls_score = mx.sym.Convolution(
             data=rpn_conv, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
         rpn_bbox_pred = mx.sym.Convolution(

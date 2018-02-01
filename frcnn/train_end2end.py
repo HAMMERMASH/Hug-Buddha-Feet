@@ -35,7 +35,7 @@ from utils.load_config import load_config
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train R-FCN network')
+    parser = argparse.ArgumentParser(description='Train faster rcnn network')
     # general
     parser.add_argument('--cfg', help='experiment configure file name', required=True, type=str)
 
