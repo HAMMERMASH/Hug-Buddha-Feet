@@ -167,10 +167,11 @@ class resnet_v1_101_frcnn(Symbol):
         # RPN
         rpn_feat = self.get_rpn_feat(data)
         rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernel=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
+        rpn_conv_relu = mx.sym.Activation(data=rpn_conv, act_type='relu', name='rpn_feat_conv_relu') 
         rpn_cls_score = mx.sym.Convolution(
-            data=rpn_conv, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
+            data=rpn_conv_relu, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
         rpn_bbox_pred = mx.sym.Convolution(
-            data=rpn_conv, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
+            data=rpn_conv_relu, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
     
         if cfg.network.NORMALIZE_RPN:
             rpn_bbox_pred = mx.sym.Custom(
