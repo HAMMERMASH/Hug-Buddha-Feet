@@ -3,7 +3,7 @@ MXNET_VERSION: "mxnet"
 output_path: "./output/frcnn/imagenet_vid"
 symbol: resnet_v1_101_frcnn
 gpus: '0,1'
-CLASS_AGNOSTIC: false
+CLASS_AGNOSTIC: False
 SCALES:
 - - 600
   - 1000
@@ -11,7 +11,7 @@ default:
   frequent: 100
   kvstore: device
 pretrained_model:
-  path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/models/pretrained_model/resnet_v1_101-0000.params" 
+  path: "/slwork/HAMMERMASH/Detections/models/pretrained_model/resnet_v1_101-0000.params" 
   pretrained_epoch: 0
 network:
   PIXEL_MEANS:
@@ -46,19 +46,19 @@ network:
   - 0.1
   - 0.4
   - 0.4
-  NORMALIZE_RPN: TRUE
+  NORMALIZE_RPN: False
   NUM_ANCHORS: 9
 dataset:
   NUM_CLASSES: 31
   dataset: ImageNetVID
-  dataset_path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/data/ILSVRC2015"
+  dataset_path: "/slwork/HAMMERMASH/Detections/data/ILSVRC2015"
   image_set: DET_train_30classes+VID_train_15frames
-  root_path: "/slwork/HAMMERMASH/Hug-Buddha-Feet/data/"
+  root_path: "/slwork/HAMMERMASH/Detections/data/"
   test_image_set: VID_val_frames
   proposal: rpn
 TRAIN:
-  lr: 0.00025
-  lr_step: '1.333'
+  lr: 0.001
+  lr_step: '5'
   lr_factor: 0.1 
   warmup: false
   warmup_lr: 0
@@ -69,13 +69,13 @@ TRAIN:
   end_epoch: 4
   model_prefix: 'frcnn_vid'
   # whether resume training
-  RESUME: false
+  RESUME: False
   # whether flip image
-  FLIP: true
+  FLIP: True
   # whether shuffle image
-  SHUFFLE: true
+  SHUFFLE: True
   # whether use OHEM
-  ENABLE_OHEM: false
+  ENABLE_OHEM: False
   # size of images for each device, 1 for e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -84,7 +84,7 @@ TRAIN:
   ASPECT_GROUPING: true
   # R-CNN
   # rcnn rois batch size
-  BATCH_ROIS: -1
+  BATCH_ROIS: 128
   BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25

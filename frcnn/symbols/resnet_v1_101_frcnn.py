@@ -34,16 +34,17 @@ class resnet_v1_101_frcnn(Symbol):
         return rpn_feat
     
     def get_rcnn_feat(self, data):
-         
-        rcnn_feat = residual_layer(data, [self.units[-1]], [self.filter_list[-1]], ['5'], conv1=False) 
+        
+        rcnn_feat = residual_layer(data, [self.units[-1]], [self.filter_list[-1]], ['5'], conv1=False, last_stride=True) 
+        rcnn_feat = mx.sym.Pooling(data=rcnn_feat, global_pool=True, kernel=(7,7), pool_type='avg', name='rcnn_pool')
 
         return rcnn_feat
 
     def region_classification(self, data, num_classes, num_reg_classes):
         
+        data = mx.sym.flatten(data)
         cls_score = mx.sym.FullyConnected(data=data, num_hidden=num_classes, name='rcnn_cls_score')
         bbox_pred = mx.sym.FullyConnected(data=data, num_hidden=4*num_reg_classes, name='rcnn_bbox_pred')
-
         return cls_score, bbox_pred
 
         
@@ -65,8 +66,8 @@ class resnet_v1_101_frcnn(Symbol):
         rpn_feat = self.get_rpn_feat(data)
     
         # RPN layers
-        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernel=(3,3), pad=(1,1), stride=(1,1), name='rpn_feat_conv')
-        rpn_conv_relu = mx.sym.Activation(data=rpn_conv, act_type='relu', name='rpn_feat_conv_relu') 
+        rpn_conv = mx.sym.Convolution(data=rpn_feat, num_filter=512, kernel=(3,3), pad=(1,1), stride=(1,1), name='rpn_conv_3x3')
+        rpn_conv_relu = mx.sym.Activation(data=rpn_conv, act_type='relu', name='rpn_relu') 
         rpn_cls_score = mx.sym.Convolution(
             data=rpn_conv_relu, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
         rpn_bbox_pred = mx.sym.Convolution(
@@ -142,7 +143,7 @@ class resnet_v1_101_frcnn(Symbol):
             bbox_loss_ = bbox_weight * mx.sym.smooth_l1(name='bbox_loss_', scalar=1.0, data=(bbox_pred - bbox_target))
             bbox_loss = mx.sym.MakeLoss(name='bbox_loss', data=bbox_loss_, grad_scale=1.0 / cfg.TRAIN.BATCH_ROIS)
             rcnn_label = label
-    
+
         # reshape output
         rcnn_label = mx.sym.Reshape(data=rcnn_label, shape=(cfg.TRAIN.BATCH_IMAGES, -1), name='label_reshape')
         cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
@@ -196,7 +197,7 @@ class resnet_v1_101_frcnn(Symbol):
             NotImplemented
     
         # rcnn
-        rcnn_feat = mx.sym.ROIPooling(data=rpn_feat, rois=rois, pooled_size=(7,7), spatial_scale=0.0625, name='roipooling')
+        rcnn_feat = mx.sym.ROIPooling(data=rpn_feat, rois=rois, pooled_size=(7,7), spatial_scale=0.0625, name='roi_pool5')
         rcnn_feat = self.get_rcnn_feat(rcnn_feat)
         cls_score, bbox_pred = self.region_classification(rcnn_feat, num_classes, num_reg_classes)
 
@@ -219,8 +220,8 @@ class resnet_v1_101_frcnn(Symbol):
 
     def init_weight(self, cfg, arg_params, aux_params):
         
-        arg_params['rpn_feat_conv_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_feat_conv_weight'])
-        arg_params['rpn_feat_conv_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_feat_conv_bias'])
+        arg_params['rpn_conv_3x3_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_conv_3x3_weight'])
+        arg_params['rpn_conv_3x3_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_conv_3x3_bias'])
 
         arg_params['rpn_cls_score_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rpn_cls_score_weight'])
         arg_params['rpn_cls_score_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rpn_cls_score_bias'])
