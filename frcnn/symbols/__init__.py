@@ -1,1 +1,2 @@
 import resnet_v1_101_frcnn
+import vgg_16_frcnn

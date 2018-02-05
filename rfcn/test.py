@@ -13,6 +13,9 @@ import sys
 import time
 import logging
 
+os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
+os.environ['MXNET_ENABLE_GPU_P2P'] = '0'
 import mxnet as mx
 sys.path.insert(0, '../')
 sys.path.insert(0, '../lib')
