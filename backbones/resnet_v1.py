@@ -19,7 +19,6 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, d
         
         conv3 = mx.sym.Convolution(data=act2, num_filter=num_filter, kernel=(1,1), stride=(1,1), pad=(0,0), no_bias=True, workspace=workspace, name='res'+name+'_branch2c')
         bn3 = mx.sym.BatchNorm(data=conv3, fix_gamma=False, eps=1e-5, momentum=bn_mom, use_global_stats=True, name='bn'+name+'_branch2c')
-        act3 = mx.sym.Activation(data=bn3, act_type='relu', name='res'+name+'_branch2c_relu')
     
         if dim_match:
             shortcut = data
@@ -27,7 +26,7 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, d
             conv1sc = mx.sym.Convolution(data=data, num_filter=num_filter, kernel=(1,1), stride=stride, no_bias=True, workspace=workspace, name='res'+name+'_branch1')
             shortcut = mx.sym.BatchNorm(data=conv1sc, fix_gamma=False, eps=1e-5, momentum=bn_mom, use_global_stats=True, name='bn'+name+'_branch1')
        
-        res = mx.symbol.broadcast_add(name='res'+name, *[shortcut,act3])
+        res = mx.symbol.broadcast_add(name='res'+name, *[shortcut,bn3])
         return mx.sym.Activation(data=res, act_type='relu', name='res'+name+'relu')
     else:
         raise NotImplementedError
