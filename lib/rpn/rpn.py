@@ -62,6 +62,30 @@ def get_rpn_batch(roidb, cfg):
 
     return data, label
 
+def get_rpn_batch_(roidb, cfg):
+    """
+    provides batch size > 1
+    """ 
+    imgs, roidb = get_image(roidb, cfg)
+    im_array = np.array([imgs[i][0] for i in range(len(roidb))], dtype=np.float32)
+    im_info = np.array([roidb[i]['im_info'] for i in range(len(roidb))], dtype=np.float32)
+
+    _MAX_GT_NUM = 64
+    gt_boxes = np.zeros((len(roidb),_MAX_GT_NUM,5), dtype=np.float32)
+    num_gt = np.zeros((len(roidb)), dtype=np.int32)
+    for i in range(len(roidb)):
+        if roidb[i]['gt_classes'].size > 0:
+            gt_inds = np.where(roidb[i]['gt_classes'] !=0)[0]
+            num_gt[i] = len(gt_inds)
+            for j in range(num_gt[i]):
+                gt_boxes[i,gt_inds[j],0:4] = roidb[i]['boxes'][gt_inds[j],:]
+                gt_boxes[i,gt_inds[j],4] = roidb[i]['gt_classes'][gt_inds[j]]
+
+    data = {'data': im_array,
+            'im_info': im_info}
+    label = {'gt_boxes': gt_boxes, 'num_gt': num_gt}
+    return data, label 
+    
 def get_rpn_pair_batch(roidb, cfg):
     """
     prototype for rpn batch: data, im_info, gt_boxes

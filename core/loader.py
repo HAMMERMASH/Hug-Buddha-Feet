@@ -11,7 +11,7 @@ import mxnet as mx
 from mxnet.executor_manager import _split_input_slice
 
 from utils.image import tensor_vstack
-from rpn.rpn import get_rpn_testbatch, get_rpn_batch, assign_anchor
+from rpn.rpn import get_rpn_testbatch, get_rpn_batch, get_rpn_batch_, assign_anchor
 from rcnn import get_rcnn_testbatch, get_rcnn_batch
 
 class TestLoader(mx.io.DataIter):
@@ -361,7 +361,7 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.feat_sym = feat_sym
         self.roidb = roidb
         self.cfg = cfg
-        self.batch_size = batch_size
+        self.batch_size = batch_size*3################################################temp
         self.shuffle = shuffle
         self.ctx = ctx
         if self.ctx is None:
@@ -377,7 +377,7 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.bbox_std = bbox_std
         
         # max interval between frames
-        self.frame_interval = 6
+        self.frame_interval = 2
 
         # reduce epoch length
         self.sparse_factor = 5
@@ -503,32 +503,39 @@ class Sequence_AnchorLoader(mx.io.DataIter):
 
     def parfetch(self, iroidb):
         # get testing data for multigpu
-        data, label = get_rpn_batch(iroidb, self.cfg)
+        data, label = get_rpn_batch_(iroidb, self.cfg)
         data_shape = {k: v.shape for k, v in data.items()}
         del data_shape['im_info']
         _, feat_shape, _ = self.feat_sym.infer_shape(**data_shape)
         feat_shape = [int(i) for i in feat_shape[0]]
 
-        # add gt_boxes to data for e2e
-        data['gt_boxes'] = label['gt_boxes'][np.newaxis, :, :]
+        data['gt_boxes'] = label['gt_boxes']
+        for i in range(len(iroidb)):
 
-        # assign anchor for label
-        label = assign_anchor(feat_shape, label['gt_boxes'], data['im_info'], self.cfg,
-                              self.feat_stride, self.anchor_scales,
-                              self.anchor_ratios, self.allowed_border,
-                              self.normalize_target, self.bbox_mean, self.bbox_std)
-        return {'data': data, 'label': label}
+            # assign anchor for label
+            im_info = np.expand_dims(data['im_info'][i], axis=0)
+            gt_boxes = label['gt_boxes'][i][0:label['num_gt'][i]]
+            anchor_dict = assign_anchor(feat_shape, gt_boxes, im_info, self.cfg, self.feat_stride, 
+                                        self.anchor_scales, self.anchor_ratios, self.allowed_border,
+                                        self.normalize_target, self.bbox_mean, self.bbox_std)
+            if i == 0:
+                anchor_label = anchor_dict
+            else:
+                anchor_label['bbox_weight'] = np.concatenate((anchor_label['bbox_weight'], anchor_dict['bbox_weight']))
+                anchor_label['bbox_target'] = np.concatenate((anchor_label['bbox_target'], anchor_dict['bbox_target']))
+                anchor_label['label'] = np.concatenate((anchor_label['label'], anchor_dict['label']))
+        return {'data': data, 'label': anchor_label}
     def get_index_list(self):
         """
           choose sequence of frames randomly
         """
         index_list = []
-        sequence_batch = self.batch_size / len(ctx)
-        for i in range(len(ctx)):
+        sequence_batch = self.batch_size / len(self.ctx)
+        for i in range(len(self.ctx)):
             stop_flag = False
             while not stop_flag:
                 cur_vid = np.random.randint(0, self.num_video)
-                cur_start = self.vid_start_ind[cur_vid] + np.random.randint(0, self.vid_len[cur_video])
+                cur_start = self.vid_start_ind[cur_vid] + np.random.randint(0, self.vid_len[cur_vid])
                 curs = []
                 curs.append(cur_start)
                 for j in range(sequence_batch - 1):
@@ -551,12 +558,12 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.vid_start_ind = []
         self.vid_len = []
         self.vid_start_ind.append(0)
-        cur_vid_name = roidb[0]['image'].split('/')[-2]
+        cur_vid_name = self.roidb[0]['image'].split('/')[-2]
         for i in range(self.size - 1):
-            vid_name = roidb[i+1]['image'].split('/')[-2]
+            vid_name = self.roidb[i+1]['image'].split('/')[-2]
             if vid_name != cur_vid_name:
                 self.vid_start_ind.append(i+1)
                 cur_vid_name = vid_name
-                self.vid_len.append(i+1-self.vid_start_ind[-1])
+                self.vid_len.append(i+1-self.vid_start_ind[-2])
 
         self.vid_len.append(self.size - self.vid_start_ind[-1])
