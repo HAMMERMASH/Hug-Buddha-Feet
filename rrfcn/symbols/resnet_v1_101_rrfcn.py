@@ -32,7 +32,8 @@ class resnet_v1_101_rrfcn(Symbol):
         self.num_classes = cfg.dataset.NUM_CLASSES
         self.num_reg_classes = (2 if cfg.CLASS_AGNOSTIC else num_classes)
         self.num_anchors = cfg.network.NUM_ANCHORS
-
+        
+        # detection work variables
         self.rpn_cls_score_weight = mx.sym.var(name='rpn_cls_score_weight', shape=(2*self.num_anchors,512,1,1), lr_mult=1, dtype='float32')
         self.rpn_cls_score_bias = mx.sym.var(name='rpn_cls_score_bias', shape=(2*self.num_anchors,), lr_mult=1, dtype='float32')
         
@@ -44,7 +45,14 @@ class resnet_v1_101_rrfcn(Symbol):
 
         self.rfcn_bbox_weight = mx.sym.var(name='rfcn_bbox_weight', shape=(7*7*4*self.num_reg_classes,512,1,1), lr_mult=1, dtype='float32')
         self.rfcn_bbox_bias = mx.sym.var(name='rfcn_bbox_bias', shape=(7*7*4*self.num_reg_classes,), lr_mult=1, dtype='float32')
-    
+
+        # gru variables
+        self.gru_w_z = mx.sym.var(name='GRU_W_z_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
+        self.gru_u_z = mx.sym.var(name='GRU_U_z_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
+        self.gru_w_r = mx.sym.var(name='GRU_W_r_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
+        self.gru_u_r = mx.sym.var(name='GRU_U_r_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
+        self.gru_w = mx.sym.var(name='GRU_W_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
+        self.gru_u = mx.sym.var(name='GRU_U_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
     def get_resnet_v1(self, data):
       
         res5c_relu = residual_layer(data, self.units, self.filter_list, ['2','3','4','5'], last_stride=True)
@@ -53,6 +61,27 @@ class resnet_v1_101_rrfcn(Symbol):
         feat_conv_3x3_relu = mx.sym.Activation(data=feat_conv_3x3, act_type="relu", name="feat_conv_3x3_relu")
         return feat_conv_3x3_relu
     
+    def get_gru(self, data, hidden):
+        
+        update_input = mx.sym.Convolution(data=data, weight=self.gru_w_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_input')
+        update_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_hidden')
+        update_gate = mx.sym.Activation(data=mx.sym.broadcast_add(update_input, update_hidden), act_type='tanh', name='gru_update_gate')
+
+        reset_input = mx.sym.Convolution(data=data, weight=self.gru_w_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_input')
+        reset_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_hidden')
+        reset_gate = mx.sym.Activation(data=mx.sym.broadcast_add(reset_input, reset_hidden), act_type='tanh', name='gru_reset_gate')
+
+        hidden_hat_input = mx.sym.Convolution(data=data, weight=self.gru_w, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_input')
+        hidden_hat_hidden = mx.sym.Convolution(data=mx.sym.broadcast_mul(reset_gate, hidden), weight=self.gru_u, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_hidden')
+        hidden_hat = mx.sym.Activation(data=mx.sym.broadcast_add(hidden_hat_input, hidden_hat_hidden), act_type='relu', name='gru_hidden_hat')
+
+        hidden_new_hidden = mx.sym.broadcast_mul(mx.sym.broadcast_minus(mx.sym.ones_like(update_gate), update_gate), hidden)
+        hidden_new_hat = mx.sym.broadcast_mul(update_gate, hidden_hat)
+
+        hidden_new = mx.sym.broadcast_add(hidden_new_hidden, hidden_new_hat)
+
+        return hidden_new
+
     def get_detection_train_symbol(self, data, im_info, gt_boxes, rpn_label, rpn_bbox_target, rpn_bbox_weight, attr, cfg):
         conv_feats = mx.sym.SliceChannel(data, axis=1, num_outputs=2)
     
@@ -167,11 +196,19 @@ class resnet_v1_101_rrfcn(Symbol):
         rpn_labels = mx.sym.SliceChannel(rpn_labels, axis=0, num_outputs=self.sequence_len)
         rpn_bbox_targets = mx.sym.SliceChannel(rpn_bbox_targets, axis=0, num_outputs=self.sequence_len)
         rpn_bbox_weights = mx.sym.SliceChannel(rpn_bbox_weights, axis=0, num_outputs=self.sequence_len)
+
+
+        hidden_list = []
+        hidden = self.get_gru(conv_feats[0], conv_feats[0])
+        hidden_list.append(hidden) 
+        for i in range(self.sequence_len-1):
+            hidden = self.get_gru(conv_feats[i+1], hidden) 
+            hidden_list.append(hidden)
           
         # output lists
         group_list = [[] for _ in range(5)]
         for i in range(self.sequence_len):
-            net = self.get_detection_train_symbol(data=conv_feats[i], im_info=im_infos[i], gt_boxes=gt_boxeses[i], rpn_label=rpn_labels[i],
+            net = self.get_detection_train_symbol(data=hidden_list[i], im_info=im_infos[i], gt_boxes=gt_boxeses[i], rpn_label=rpn_labels[i],
                                              rpn_bbox_target=rpn_bbox_targets[i], rpn_bbox_weight=rpn_bbox_weights[i], attr='{}'.format(i+1), cfg=cfg) 
 
             for j in range(5):
@@ -258,6 +295,7 @@ class resnet_v1_101_rrfcn(Symbol):
         return group
 
     def init_weight(self, cfg, arg_params, aux_params):
+        """
         arg_params['feat_conv_3x3_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['feat_conv_3x3_weight'])
         arg_params['feat_conv_3x3_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['feat_conv_3x3_bias'])
 
@@ -270,3 +308,10 @@ class resnet_v1_101_rrfcn(Symbol):
         arg_params['rfcn_cls_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rfcn_cls_bias'])
         arg_params['rfcn_bbox_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rfcn_bbox_weight'])
         arg_params['rfcn_bbox_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rfcn_bbox_bias'])
+        """
+        arg_params['GRU_W_z_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_z_weight'])
+        arg_params['GRU_U_z_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_z_weight'])
+        arg_params['GRU_W_r_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_r_weight'])
+        arg_params['GRU_U_r_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_r_weight'])
+        arg_params['GRU_W_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_weight'])
+        arg_params['GRU_U_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_weight'])

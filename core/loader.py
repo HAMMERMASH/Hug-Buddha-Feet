@@ -377,7 +377,7 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.bbox_std = bbox_std
         
         # max interval between frames
-        self.frame_interval = 2
+        self.frame_interval = 5
 
         # reduce epoch length
         self.sparse_factor = 5
