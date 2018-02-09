@@ -42,7 +42,7 @@ network:
   - 0.1
   - 0.4
   - 0.4
-  NORMALIZE_RPN: False
+  NORMALIZE_RPN: false
   NUM_ANCHORS: 9
 dataset:
   NUM_CLASSES: 31
