@@ -78,6 +78,12 @@ TRAIN:
   ENABLE_OHEM: true
   # size of images for each device, 1 for e2e
   BATCH_IMAGES: 1
+  # sequence length
+  SEQUENCE_LEN: 3
+  # max frame interval
+  MAX_INTERVAL: 5
+  # sparse factor to reduce iteration per epoch
+  SPARSE_FACTOR: 5
   # e2e changes behavior of anchor loader and metric
   END2END: true
   # group images with similar aspect ratio

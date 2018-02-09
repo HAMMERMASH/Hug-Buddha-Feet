@@ -361,7 +361,7 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.feat_sym = feat_sym
         self.roidb = roidb
         self.cfg = cfg
-        self.batch_size = batch_size*3################################################temp
+        self.batch_size = batch_size
         self.shuffle = shuffle
         self.ctx = ctx
         if self.ctx is None:
@@ -377,10 +377,10 @@ class Sequence_AnchorLoader(mx.io.DataIter):
         self.bbox_std = bbox_std
         
         # max interval between frames
-        self.frame_interval = 5
+        self.frame_interval = cfg.TRAIN.MAX_INTERVAL
 
         # reduce epoch length
-        self.sparse_factor = 5
+        self.sparse_factor = cfg.TRAIN.SPARSE_FACTOR
 
         # infer properties from roidb
         self.size = len(roidb)

@@ -27,7 +27,7 @@ class resnet_v1_101_rrfcn(Symbol):
         self.workspace = 512
         self.units = (3, 4, 23, 3) # use for 101
         self.filter_list = [256, 512, 1024, 2048]
-        self.sequence_len = 3
+        self.sequence_len = cfg.TRAIN.SEQUENCE_LEN
 
         self.num_classes = cfg.dataset.NUM_CLASSES
         self.num_reg_classes = (2 if cfg.CLASS_AGNOSTIC else num_classes)

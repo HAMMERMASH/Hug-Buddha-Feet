@@ -70,7 +70,7 @@ def train_net(args, config, ctx):
 
     # setup multi-gpu
     batch_size = len(ctx)
-    input_batch_size = config.TRAIN.BATCH_IMAGES * batch_size
+    input_batch_size = config.TRAIN.BATCH_IMAGES * batch_size * config.TRAIN.SEQUENCE_LEN
 
     # print config
     #pprint.pprint(config)
@@ -91,9 +91,9 @@ def train_net(args, config, ctx):
                               bbox_std=config.network.ANCHOR_STDS)
 
     # infer max shape
-    max_data_shape = [('data', (3, 3, max([v[0] for v in config.SCALES]), max([v[1] for v in config.SCALES])))]
+    max_data_shape = [('data', (config.TRAIN.SEQUENCE_LEN, 3, max([v[0] for v in config.SCALES]), max([v[1] for v in config.SCALES])))]
     max_data_shape, max_label_shape = train_data.infer_shape(max_data_shape)
-    max_data_shape.append(('gt_boxes', (3, 100, 5)))
+    max_data_shape.append(('gt_boxes', (config.TRAIN.SEQUENCE_LEN, 100, 5)))
     print('providing maximum shape', max_data_shape, max_label_shape)
     data_shape_dict = dict(train_data.provide_data_single + train_data.provide_label_single)
     pprint.pprint(data_shape_dict)
