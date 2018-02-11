@@ -1,1 +1,1 @@
-import resnet_v1_101_rrfcn
+import resnet_v1_101_gru_rrfcn

@@ -101,6 +101,113 @@ class TestLoader(mx.io.DataIter):
         self.data = [[mx.nd.array(idata[name]) for name in self.data_name] for idata in data]
         self.im_info = im_info
 
+
+class Sequence_TestLoader(mx.io.DataIter):
+    def __init__(self, roidb, config, batch_size=1, shuffle=False,
+                 has_rpn=False):
+        super(Sequence_TestLoader, self).__init__(self)
+
+        # save parameters as properties
+        self.cfg = config
+        self.roidb = roidb
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.has_rpn = has_rpn
+
+        # infer properties from roidb
+        self.size = len(self.roidb)
+        self.index = np.arange(self.size)
+
+        # decide data and label names (only for training)
+        if has_rpn:
+            self.data_name = ['data', 'im_info', 'hidden']
+        else:
+            self.data_name = ['data', 'rois']
+        self.label_name = None
+
+        # status variable for synchronization between get_data and get_label
+        self.cur = 0
+        self.data = None
+        self.label = []
+        self.im_info = None
+        self.new_vid = None
+        self.cur_vid = None
+
+        # get first batch to fill in provide_data and provide_label
+        self.reset()
+        self.get_batch()
+
+    @property
+    def provide_data(self):
+        return [[(k, v.shape) for k, v in zip(self.data_name, idata)] for idata in self.data]
+
+    @property
+    def provide_label(self):
+        return [None for _ in range(len(self.data))]
+
+    @property
+    def provide_data_single(self):
+        return [(k, v.shape) for k, v in zip(self.data_name, self.data[0])]
+
+    @property
+    def provide_label_single(self):
+        return None
+
+    def reset(self):
+        self.cur = 0
+        if self.shuffle:
+            np.random.shuffle(self.index)
+
+    def iter_next(self):
+        return self.cur < self.size
+
+    def next(self):
+        if self.iter_next():
+            self.get_batch()
+            self.cur += self.batch_size
+            return self.im_info, self.new_vid, mx.io.DataBatch(data=self.data, label=self.label, pad=self.getpad(), index=self.getindex(),
+                                                               provide_data=self.provide_data, provide_label=self.provide_label)
+        else:
+            raise StopIteration
+
+    def getindex(self):
+        return self.cur / self.batch_size
+
+    def getpad(self):
+        if self.cur + self.batch_size > self.size:
+            return self.cur + self.batch_size - self.size
+        else:
+            return 0
+
+    def get_batch(self):
+        assert self.batch_size == 1, 'only support batch_size == 1'
+        cur_from = self.cur
+        cur_to = min(cur_from + self.batch_size, self.size)
+        roidb = [self.roidb[self.index[i]] for i in range(cur_from, cur_to)]
+        if self.has_rpn:
+            data, label, im_info = get_rpn_testbatch(roidb, self.cfg)
+        else:
+            data, label, im_info = get_rcnn_testbatch(roidb, self.cfg)
+        image_shape = list(data[0]['data'].shape)
+        hidden_shape = [image_shape[0], self.cfg.network.CONV_FEAT_CHANNEL, np.ceil(image_shape[2]*1.0/16).astype(int), np.ceil(image_shape[3]*1.0/16).astype(int)]
+        hidden_shape = tuple(hidden_shape)
+        data = [{'data': data[0]['data'] ,
+                'im_info': data[0]['im_info'],
+                'hidden': np.zeros(hidden_shape)}]
+
+        self.data = [[mx.nd.array(idata[name]) for name in self.data_name] for idata in data]
+        self.im_info = im_info
+        if self.cur == 0:
+            self.new_vid = True
+            self.cur_vid = roidb[0]['image'].split('/')[-2]
+        else:
+            if self.cur_vid != roidb[0]['image'].split('/')[-2]:
+                self.new_vid = True
+                self.cur_vid = roidb[0]['image'].split('/')[-2]
+            else:
+                self.new_vid = False
+
+
 class AnchorLoader(mx.io.DataIter):
 
     def __init__(self, feat_sym, roidb, cfg, batch_size=1, shuffle=False, ctx=None, work_load_list=None,

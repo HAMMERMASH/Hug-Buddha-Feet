@@ -27,7 +27,7 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, d
             shortcut = mx.sym.BatchNorm(data=conv1sc, fix_gamma=False, eps=1e-5, momentum=bn_mom, use_global_stats=True, name='bn'+name+'_branch1')
        
         res = mx.symbol.broadcast_add(name='res'+name, *[shortcut,bn3])
-        return mx.sym.Activation(data=res, act_type='relu', name='res'+name+'relu')
+        return mx.sym.Activation(data=res, act_type='relu', name='res'+name+'_relu')
     else:
         raise NotImplementedError
 

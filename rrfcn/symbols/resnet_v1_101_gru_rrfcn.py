@@ -16,7 +16,7 @@ from operator_py.rpn_inv_normalize import *
 sys.path.insert(0, '../')
 from backbones.resnet_v1 import residual_layer
 
-class resnet_v1_101_rrfcn(Symbol):
+class resnet_v1_101_gru_rrfcn(Symbol):
     
     def __init__(self, cfg):
         """
@@ -78,7 +78,7 @@ class resnet_v1_101_rrfcn(Symbol):
         hidden_new_hidden = mx.sym.broadcast_mul(mx.sym.broadcast_minus(mx.sym.ones_like(update_gate), update_gate), hidden)
         hidden_new_hat = mx.sym.broadcast_mul(update_gate, hidden_hat)
 
-        hidden_new = mx.sym.broadcast_add(hidden_new_hidden, hidden_new_hat)
+        hidden_new = mx.sym.broadcast_add(hidden_new_hidden, hidden_new_hat, name='hidden_new')
 
         return hidden_new
 
@@ -231,18 +231,20 @@ class resnet_v1_101_rrfcn(Symbol):
         num_anchors = cfg.network.NUM_ANCHORS # num anchors per cell
 
         data = mx.sym.Variable(name="data")
+        hidden = mx.sym.Variable(name="hidden")
         im_info = mx.sym.Variable(name="im_info")
     
         # shared convolutional layers
         conv_feat = self.get_resnet_v1(data)
-        conv_feats = mx.sym.SliceChannel(conv_feat, axis=1, num_outputs=2)
+        hidden_new = self.get_gru(conv_feat, hidden)
+        conv_feats = mx.sym.SliceChannel(hidden_new, axis=1, num_outputs=2)
 
         # RPN
         rpn_feat = conv_feats[0]
         rpn_cls_score = mx.sym.Convolution(
-            data=rpn_feat, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
+            data=rpn_feat, weight=self.rpn_cls_score_weight, bias=self.rpn_cls_score_bias, kernel=(1, 1), pad=(0, 0), num_filter=2 * num_anchors, name="rpn_cls_score")
         rpn_bbox_pred = mx.sym.Convolution(
-            data=rpn_feat, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
+            data=rpn_feat, weight=self.rpn_bbox_pred_weight, bias=self.rpn_bbox_pred_bias, kernel=(1, 1), pad=(0, 0), num_filter=4 * num_anchors, name="rpn_bbox_pred")
     
         if cfg.network.NORMALIZE_RPN:
             rpn_bbox_pred = mx.sym.Custom(
@@ -268,8 +270,8 @@ class resnet_v1_101_rrfcn(Symbol):
     
         # res5
         rfcn_feat = conv_feats[1]
-        rfcn_cls = mx.sym.Convolution(data=rfcn_feat, kernel=(1, 1), num_filter=7*7*num_classes, name="rfcn_cls")
-        rfcn_bbox = mx.sym.Convolution(data=rfcn_feat, kernel=(1, 1), num_filter=7*7*4*num_reg_classes, name="rfcn_bbox")
+        rfcn_cls = mx.sym.Convolution(data=rfcn_feat, weight=self.rfcn_cls_weight, bias=self.rfcn_cls_bias, kernel=(1, 1), num_filter=7*7*num_classes, name="rfcn_cls")
+        rfcn_bbox = mx.sym.Convolution(data=rfcn_feat, weight=self.rfcn_bbox_weight, bias=self.rfcn_bbox_bias, kernel=(1, 1), num_filter=7*7*4*num_reg_classes, name="rfcn_bbox")
         psroipooled_cls_rois = mx.contrib.sym.PSROIPooling(name='psroipooled_cls_rois', data=rfcn_cls, rois=rois, group_size=7, pooled_size=7,
                                                    output_dim=num_classes, spatial_scale=0.0625)
         psroipooled_loc_rois = mx.contrib.sym.PSROIPooling(name='psroipooled_loc_rois', data=rfcn_bbox, rois=rois, group_size=7, pooled_size=7,
@@ -288,7 +290,7 @@ class resnet_v1_101_rrfcn(Symbol):
         bbox_pred = mx.sym.Reshape(data=bbox_pred, shape=(cfg.TEST.BATCH_IMAGES, -1, 4 * num_reg_classes), name='bbox_pred_reshape')
     
         # group output
-        group = mx.sym.Group([rois, cls_prob, bbox_pred])
+        group = mx.sym.Group([rois, cls_prob, bbox_pred, hidden_new, mx.sym.BlockGrad(conv_feat, name='conv_feat')])
         self.sym = group
         # arg_shape, data_shape, axus_shape = psroipooled_loc_rois.infer_shape(data=(1,3,1000,600))
         # print data_shape

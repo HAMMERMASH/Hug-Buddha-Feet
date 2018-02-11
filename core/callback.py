@@ -52,11 +52,17 @@ def do_checkpoint(prefix, means, stds):
             weight = arg['rfcn_bbox_weight']
             bias = arg['rfcn_bbox_bias']
             repeat = bias.shape[0] / means.shape[0]
-
             arg['rfcn_bbox_weight_test'] = weight * mx.nd.repeat(mx.nd.array(stds), repeats=repeat).reshape((bias.shape[0], 1, 1, 1))
             arg['rfcn_bbox_bias_test'] = arg['rfcn_bbox_bias'] * mx.nd.repeat(mx.nd.array(stds), repeats=repeat) + mx.nd.repeat(mx.nd.array(means), repeats=repeat)
+        elif 'frcnn' in prefix:
+            arg['rcnn_bbox_pred_weight_test'] = (arg['rcnn_bbox_pred_weight'].T * mx.nd.array(stds)).T
+            arg['rcnn_bbox_pred_bias_test'] = arg['rcnn_bbox_pred_bias'] * mx.nd.array(stds) + mx.nd.array(means)
         mx.model.save_checkpoint(prefix, iter_no + 1, sym, arg, aux)
         if 'rfcn' in prefix:
             arg.pop('rfcn_bbox_weight_test')
             arg.pop('rfcn_bbox_bias_test')
+        elif 'frcnn' in prefix:
+            arg.pop('rcnn_bbox_pred_weight_test')
+            arg.pop('rcnn_bbox_pred_bias_test')
+
     return _callback
