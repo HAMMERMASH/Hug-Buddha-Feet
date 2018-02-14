@@ -1,7 +1,7 @@
 ---
 MXNET_VERSION: "mxnet"
 output_path: "./output/rrfcn/imagenet_vid"
-symbol: resnet_v1_101_rrfcn
+symbol: resnet_v1_101_gru_rrfcn
 gpus: '0,1'
 CLASS_AGNOSTIC: true
 SCALES:
@@ -57,7 +57,7 @@ dataset:
   test_image_set: VID_val_frames
   proposal: rpn
 TRAIN:
-  lr: 0.00001
+  lr: 0.0001
   lr_step: '1.333'
   lr_factor: 0.1 
   warmup: false
@@ -79,11 +79,11 @@ TRAIN:
   # size of images for each device, 1 for e2e
   BATCH_IMAGES: 1
   # sequence length
-  SEQUENCE_LEN: 3
+  SEQUENCE_LEN: 4
   # max frame interval
-  MAX_INTERVAL: 5
+  MAX_INTERVAL: 3
   # sparse factor to reduce iteration per epoch
-  SPARSE_FACTOR: 5
+  SPARSE_FACTOR: 1
   # e2e changes behavior of anchor loader and metric
   END2END: true
   # group images with similar aspect ratio

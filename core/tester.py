@@ -322,6 +322,7 @@ def pred_eval_single_sequence(gpu_id, predictor, test_data, imdb, cfg, vis=False
     data_names = [k[0] for k in test_data.provide_data[0]]
     num_images = test_data.size
 
+    frame_ids = [x['frame_id'] for x in test_data.roidb]
     if not isinstance(test_data, PrefetchingIter):
         test_data = PrefetchingIter(test_data)
 

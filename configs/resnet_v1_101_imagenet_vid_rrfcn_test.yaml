@@ -11,7 +11,7 @@ default:
   frequent: 100
   kvstore: device
 pretrained_model:
-  path: "/slwork/HAMMERMASH/Detections/models/pretrained_model/rrfcn_vid-0004.params" 
+  path: "/slwork/HAMMERMASH/Detections/models/pretrained_model/rrfcn_vid-0003.params" 
   pretrained_epoch: 4
 network:
   PIXEL_MEANS:

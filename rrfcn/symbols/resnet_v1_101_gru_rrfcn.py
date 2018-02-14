@@ -65,11 +65,11 @@ class resnet_v1_101_gru_rrfcn(Symbol):
         
         update_input = mx.sym.Convolution(data=data, weight=self.gru_w_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_input')
         update_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_hidden')
-        update_gate = mx.sym.Activation(data=mx.sym.broadcast_add(update_input, update_hidden), act_type='tanh', name='gru_update_gate')
+        update_gate = mx.sym.Activation(data=mx.sym.broadcast_add(update_input, update_hidden), act_type='sigmoid', name='gru_update_gate')
 
         reset_input = mx.sym.Convolution(data=data, weight=self.gru_w_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_input')
         reset_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_hidden')
-        reset_gate = mx.sym.Activation(data=mx.sym.broadcast_add(reset_input, reset_hidden), act_type='tanh', name='gru_reset_gate')
+        reset_gate = mx.sym.Activation(data=mx.sym.broadcast_add(reset_input, reset_hidden), act_type='sigmoid', name='gru_reset_gate')
 
         hidden_hat_input = mx.sym.Convolution(data=data, weight=self.gru_w, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_input')
         hidden_hat_hidden = mx.sym.Convolution(data=mx.sym.broadcast_mul(reset_gate, hidden), weight=self.gru_u, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_hidden')
