@@ -16,7 +16,7 @@ from operator_py.rpn_inv_normalize import *
 sys.path.insert(0, '../')
 from backbones.resnet_v1 import residual_layer
 
-class resnet_v1_101_gru_rrfcn(Symbol):
+class resnet_v1_101_simple_rrfcn(Symbol):
     
     def __init__(self, cfg):
         """
@@ -46,13 +46,6 @@ class resnet_v1_101_gru_rrfcn(Symbol):
         self.rfcn_bbox_weight = mx.sym.var(name='rfcn_bbox_weight', shape=(7*7*4*self.num_reg_classes,512,1,1), lr_mult=1, dtype='float32')
         self.rfcn_bbox_bias = mx.sym.var(name='rfcn_bbox_bias', shape=(7*7*4*self.num_reg_classes,), lr_mult=1, dtype='float32')
 
-        # gru variables
-        self.gru_w_z = mx.sym.var(name='GRU_W_z_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
-        self.gru_u_z = mx.sym.var(name='GRU_U_z_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
-        self.gru_w_r = mx.sym.var(name='GRU_W_r_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
-        self.gru_u_r = mx.sym.var(name='GRU_U_r_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
-        self.gru_w = mx.sym.var(name='GRU_W_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
-        self.gru_u = mx.sym.var(name='GRU_U_weight', shape=(1024,1024,3,3), lr_mult=1, dtype='float32')
     def get_resnet_v1(self, data):
       
         res5c_relu = residual_layer(data, self.units, self.filter_list, ['2','3','4','5'], last_stride=True)
@@ -61,26 +54,11 @@ class resnet_v1_101_gru_rrfcn(Symbol):
         feat_conv_3x3_relu = mx.sym.Activation(data=feat_conv_3x3, act_type="relu", name="feat_conv_3x3_relu")
         return feat_conv_3x3_relu
     
-    def get_gru(self, data, hidden):
+    def get_simple(self, data, hidden):
         
-        hidden = mx.sym.Pooling(data=hidden, pool_type='max', kernel=(3,3), pad=(1,1), stride=(1,1), name='hidden_pool')
+        hidden = mx.sym.Pooling(data=hidden, pool_type='avg', kernel=(3,3), pad=(1,1), stride=(1,1), name='hidden_pool')
 
-        update_input = mx.sym.Convolution(data=data, weight=self.gru_w_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_input')
-        update_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_z, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_update_hidden')
-        update_gate = mx.sym.Activation(data=mx.sym.broadcast_add(update_input, update_hidden), act_type='sigmoid', name='gru_update_gate')
-
-        reset_input = mx.sym.Convolution(data=data, weight=self.gru_w_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_input')
-        reset_hidden = mx.sym.Convolution(data=hidden, weight=self.gru_u_r, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_reset_hidden')
-        reset_gate = mx.sym.Activation(data=mx.sym.broadcast_add(reset_input, reset_hidden), act_type='sigmoid', name='gru_reset_gate')
-
-        hidden_hat_input = mx.sym.Convolution(data=data, weight=self.gru_w, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_input')
-        hidden_hat_hidden = mx.sym.Convolution(data=mx.sym.broadcast_mul(reset_gate, hidden), weight=self.gru_u, kernel=(3,3), pad=(1,1), num_filter=1024, no_bias=True, name='gru_hidden_hat_hidden')
-        hidden_hat = mx.sym.Activation(data=mx.sym.broadcast_add(hidden_hat_input, hidden_hat_hidden), act_type='relu', name='gru_hidden_hat')
-
-        hidden_new_hidden = mx.sym.broadcast_mul(mx.sym.broadcast_minus(mx.sym.ones_like(update_gate), update_gate), hidden)
-        hidden_new_hat = mx.sym.broadcast_mul(update_gate, hidden_hat)
-
-        hidden_new = mx.sym.broadcast_add(hidden_new_hidden, hidden_new_hat, name='hidden_new')
+        hidden_new = mx.sym.broadcast_add(data, hidden, name='hidden_new')
 
         return hidden_new
 
@@ -181,7 +159,6 @@ class resnet_v1_101_gru_rrfcn(Symbol):
 
     def get_train_symbol(self, cfg):
 
-
         data = mx.sym.Variable(name="data")
         im_infos = mx.sym.Variable(name="im_info")
         gt_boxeses = mx.sym.Variable(name="gt_boxes")
@@ -201,10 +178,10 @@ class resnet_v1_101_gru_rrfcn(Symbol):
 
 
         hidden_list = []
-        hidden = self.get_gru(conv_feats[0], conv_feats[0])
+        hidden = self.get_simple(conv_feats[0], conv_feats[0])
         hidden_list.append(hidden) 
         for i in range(self.sequence_len-1):
-            hidden = self.get_gru(conv_feats[i+1], hidden) 
+            hidden = self.get_simple(conv_feats[i+1], hidden) 
             hidden_list.append(hidden)
           
         # output lists
@@ -238,7 +215,7 @@ class resnet_v1_101_gru_rrfcn(Symbol):
     
         # shared convolutional layers
         conv_feat = self.get_resnet_v1(data)
-        hidden_new = self.get_gru(conv_feat, hidden)
+        hidden_new = self.get_simple(conv_feat, hidden)
         conv_feats = mx.sym.SliceChannel(hidden_new, axis=1, num_outputs=2)
 
         # RPN
@@ -313,9 +290,3 @@ class resnet_v1_101_gru_rrfcn(Symbol):
         arg_params['rfcn_bbox_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rfcn_bbox_weight'])
         arg_params['rfcn_bbox_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rfcn_bbox_bias'])
         """
-        arg_params['GRU_W_z_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_z_weight'])
-        arg_params['GRU_U_z_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_z_weight'])
-        arg_params['GRU_W_r_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_r_weight'])
-        arg_params['GRU_U_r_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_r_weight'])
-        arg_params['GRU_W_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_W_weight'])
-        arg_params['GRU_U_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['GRU_U_weight'])
