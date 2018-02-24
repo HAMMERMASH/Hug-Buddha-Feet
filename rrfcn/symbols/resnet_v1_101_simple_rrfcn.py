@@ -46,6 +46,10 @@ class resnet_v1_101_simple_rrfcn(Symbol):
         self.rfcn_bbox_weight = mx.sym.var(name='rfcn_bbox_weight', shape=(7*7*4*self.num_reg_classes,512,1,1), lr_mult=1, dtype='float32')
         self.rfcn_bbox_bias = mx.sym.var(name='rfcn_bbox_bias', shape=(7*7*4*self.num_reg_classes,), lr_mult=1, dtype='float32')
 
+        # recurrent variable
+        self.rconv_weight = mx.sym.var(name='rconv_weight', shape=(1024,2048,3,3), lr_mult=1, dtype='float32')
+        self.rconv_bias = mx.sym.var(name='rconv_bias', shape=(1024,), lr_mult=2, dtype='float32')
+
     def get_resnet_v1(self, data):
       
         res5c_relu = residual_layer(data, self.units, self.filter_list, ['2','3','4','5'], last_stride=True)
@@ -57,8 +61,9 @@ class resnet_v1_101_simple_rrfcn(Symbol):
     def get_simple(self, data, hidden):
         
         hidden = mx.sym.Pooling(data=hidden, pool_type='avg', kernel=(3,3), pad=(1,1), stride=(1,1), name='hidden_pool')
-
-        hidden_new = mx.sym.broadcast_add(data, hidden, name='hidden_new')
+        
+        concat = mx.sym.Concat(data, hidden, dim=1)
+        hidden_new = mx.sym.Convolution(concat, weight=self.rconv_weight, bias=self.rconv_bias, kernel=(3,3), pad=(6,6), dilate=(6,6), num_filter=1024, name='hidden_new')
 
         return hidden_new
 
@@ -290,3 +295,6 @@ class resnet_v1_101_simple_rrfcn(Symbol):
         arg_params['rfcn_bbox_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rfcn_bbox_weight'])
         arg_params['rfcn_bbox_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rfcn_bbox_bias'])
         """
+        arg_params['rconv_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['rconv_weight'])
+        arg_params['rconv_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['rconv_bias'])
+
