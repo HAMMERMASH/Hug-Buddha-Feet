@@ -60,10 +60,11 @@ class resnet_v1_101_simple_rrfcn(Symbol):
     
     def get_simple(self, data, hidden):
         
-        hidden = mx.sym.Pooling(data=hidden, pool_type='avg', kernel=(3,3), pad=(1,1), stride=(1,1), name='hidden_pool')
-        
+        hidden = mx.sym.Pooling(data=hidden, pool_type='max', kernel=(3,3), pad=(1,1), stride=(1,1), name='hidden_pool')
         concat = mx.sym.Concat(data, hidden, dim=1)
-        hidden_new = mx.sym.Convolution(concat, weight=self.rconv_weight, bias=self.rconv_bias, kernel=(3,3), pad=(6,6), dilate=(6,6), num_filter=1024, name='hidden_new')
+        hidden_conv = mx.sym.Convolution(concat, weight=self.rconv_weight, bias=self.rconv_bias, kernel=(3,3), pad=(6,6), dilate=(6,6), num_filter=1024, name='hidden_conv')
+        hidden_conv_relu = mx.sym.Activation(data=hidden_conv, act_type='relu', name='hidden_conv_relu')
+        hidden_new = mx.sym.broadcast_add(data, hidden_conv_relu, name='hidden_new') 
 
         return hidden_new
 
